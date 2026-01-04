@@ -101,6 +101,19 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Unknown slash command - show available commands
+    if (input.startsWith("/")) {
+      console.log(`
+Unknown command: ${input}
+
+Available commands:
+  /show-thinking  Toggle display of model reasoning
+  /new            Clear conversation memory and start fresh
+  exit            Quit Cody
+`);
+      continue;
+    }
+
     // Skip empty input
     if (!userInput.trim()) {
       continue;
