@@ -15,13 +15,11 @@
  * This continues until the LLM decides it has enough information to respond.
  */
 
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionToolMessageParam,
-} from "openai/resources/chat/completions";
+import type { ChatCompletionToolMessageParam } from "openai/resources/chat/completions";
 import { client } from "./client.js";
 import { config, runtimeSettings } from "../config.js";
 import { getToolDefinitions, executeTool } from "../tools/index.js";
+import { Conversation } from "./conversation.js";
 
 // Logging helpers for visibility
 const log = {
@@ -34,19 +32,6 @@ const log = {
   },
   error: (msg: string) => console.log(`   ✗ Error: ${msg}`),
 };
-
-/**
- * System prompt that tells the LLM who it is and how to behave.
- * This is sent at the start of every conversation and shapes the LLM's behavior.
- */
-const SYSTEM_PROMPT = `You are Cody, a helpful AI coding assistant. You help users with programming tasks by reading files, writing code, running commands, and exploring directories.
-
-When given a task:
-1. Think through what steps are needed
-2. Use the available tools to accomplish the task
-3. Explain what you did and show relevant results
-
-Be concise but helpful. If something fails, explain what went wrong and suggest alternatives.`;
 
 /**
  * Parse tool call arguments, handling potential JSON issues from local models.
@@ -140,23 +125,22 @@ function processThinkingTags(content: string): string {
  * Returns the final text response from the LLM.
  *
  * THIS IS THE HEART OF THE AGENT - READ THIS CAREFULLY!
+ *
+ * @param conversation - The conversation state (maintains history across calls)
+ * @param userMessage - The user's current message
  */
-export async function runAgentLoop(userMessage: string): Promise<string> {
+export async function runAgentLoop(
+  conversation: Conversation,
+  userMessage: string
+): Promise<string> {
   // =========================================================================
-  // STEP 1: INITIALIZE THE CONVERSATION
+  // STEP 1: ADD USER MESSAGE TO CONVERSATION
   // =========================================================================
-  // We create an array to hold the conversation history. This is crucial
-  // because LLMs are stateless - they don't remember previous calls.
-  // We must send the ENTIRE conversation each time we call the API.
+  // The conversation object maintains history across multiple user interactions.
+  // We add the new user message to the existing history, so the LLM can
+  // reference previous messages in the session.
   //
-  // The conversation starts with:
-  //   - A "system" message that defines the AI's personality and capabilities
-  //   - The "user" message containing their request
-  //
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: userMessage },
-  ];
+  conversation.addUserMessage(userMessage);
 
   // =========================================================================
   // STEP 2: PREPARE TOOLS
@@ -195,7 +179,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
     //
     const response = await client.chat.completions.create({
       model: config.model,
-      messages,
+      messages: conversation.getMessages(),
       tools,
       temperature: config.temperature,
       max_tokens: config.maxTokens,
@@ -223,7 +207,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
     // The history now looks like:
     //   [system, user, assistant, ...]
     //
-    messages.push(assistantMessage);
+    conversation.addAssistantMessage(assistantMessage);
 
     // =========================================================================
     // STEP 7: CHECK FOR TOOL CALLS
@@ -326,7 +310,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
     // On the next iteration, the LLM will see its previous request AND
     // the results, allowing it to continue reasoning.
     //
-    messages.push(...toolResults);
+    conversation.addToolResults(toolResults);
 
     log.step("Sending tool results back to LLM...");
 
@@ -352,6 +336,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
   // This usually indicates a problem (confused model, infinite loop, etc.)
   //
   log.error(`Hit maximum iterations (${maxIterations})`);
+  const messages = conversation.getMessages();
   const lastMessage = messages[messages.length - 1];
   if (lastMessage && "content" in lastMessage && typeof lastMessage.content === "string") {
     return processThinkingTags(lastMessage.content);

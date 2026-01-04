@@ -8,7 +8,7 @@
 
 import * as readline from "readline";
 import { config, runtimeSettings } from "./config.js";
-import { runAgentLoop } from "./agent/index.js";
+import { runAgentLoop, Conversation } from "./agent/index.js";
 
 // ============================================================================
 // WELCOME MESSAGE
@@ -32,7 +32,9 @@ function showWelcome(): void {
 `);
   console.log(`Connected to: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
-  console.log(`\nCommands: "exit" to quit, "/show-thinking" to toggle model reasoning\n`);
+  console.log(
+    `\nCommands: "exit" to quit, "/show-thinking" to toggle reasoning, "/new" to clear memory\n`
+  );
 }
 
 // ============================================================================
@@ -43,6 +45,9 @@ function showWelcome(): void {
 //
 async function main(): Promise<void> {
   showWelcome();
+
+  // Create conversation state - persists across messages in the session
+  const conversation = new Conversation();
 
   // Create readline interface for terminal input/output with history support
   const rl = readline.createInterface({
@@ -89,6 +94,13 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Check for /new command
+    if (input === "/new") {
+      conversation.reset();
+      console.log(`\n[Conversation memory cleared]\n`);
+      continue;
+    }
+
     // Skip empty input
     if (!userInput.trim()) {
       continue;
@@ -96,7 +108,7 @@ async function main(): Promise<void> {
 
     try {
       // Run the agent loop and get the response
-      const response = await runAgentLoop(userInput);
+      const response = await runAgentLoop(conversation, userInput);
 
       // Display Cody's response
       console.log(`\n${"─".repeat(60)}`);
