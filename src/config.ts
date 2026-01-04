@@ -11,6 +11,7 @@ export const config = {
 
   // The model loaded in LM Studio
   // This must match exactly what LM Studio shows
+  // SETUP: change this to the model you want to use
   model: "nvidia-nemotron-3-nano-30b-a3b-mlx",
 
   // Optional: Adjust model behavior
