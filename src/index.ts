@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Cody CLI - A simple AI coding agent
  *
@@ -6,7 +7,7 @@
  */
 
 import * as readline from "readline";
-import { config } from "./config.js";
+import { config, runtimeSettings } from "./config.js";
 import { runAgentLoop } from "./agent/index.js";
 
 // ============================================================================
@@ -31,7 +32,7 @@ function showWelcome(): void {
 `);
   console.log(`Connected to: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
-  console.log(`\nType your request and press Enter. Type "exit" to quit.\n`);
+  console.log(`\nCommands: "exit" to quit, "/show-thinking" to toggle model reasoning\n`);
 }
 
 // ============================================================================
@@ -43,16 +44,25 @@ function showWelcome(): void {
 async function main(): Promise<void> {
   showWelcome();
 
-  // Create readline interface for terminal input/output
+  // Create readline interface for terminal input/output with history support
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    historySize: 100,
+    terminal: true,
   });
+
+  // Access history array (exists at runtime but not in TS types)
+  const history = (rl as unknown as { history: string[] }).history;
 
   // Promisified question function for async/await usage
   const askQuestion = (prompt: string): Promise<string> => {
     return new Promise((resolve) => {
       rl.question(prompt, (answer) => {
+        // Add to history for up-arrow recall (if non-empty)
+        if (answer.trim() && history && !history.includes(answer)) {
+          history.unshift(answer);
+        }
         resolve(answer);
       });
     });
@@ -63,11 +73,20 @@ async function main(): Promise<void> {
     // Get user input
     const userInput = await askQuestion("You: ");
 
+    const input = userInput.trim().toLowerCase();
+
     // Check for exit command
-    if (userInput.toLowerCase().trim() === "exit") {
+    if (input === "exit") {
       console.log("\nGoodbye! Happy coding!\n");
       rl.close();
       break;
+    }
+
+    // Check for /show-thinking command
+    if (input === "/show-thinking") {
+      runtimeSettings.showThinking = !runtimeSettings.showThinking;
+      console.log(`\n[Thinking display: ${runtimeSettings.showThinking ? "ON" : "OFF"}]\n`);
+      continue;
     }
 
     // Skip empty input

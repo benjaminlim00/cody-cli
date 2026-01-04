@@ -17,3 +17,11 @@ export const config = {
   temperature: 0.7,
   maxTokens: 4096,
 };
+
+/**
+ * Runtime settings that can be toggled during the session.
+ */
+export const runtimeSettings = {
+  // When true, show the model's <think>...</think> reasoning
+  showThinking: true,
+};

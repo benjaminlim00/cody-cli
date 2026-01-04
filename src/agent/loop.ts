@@ -20,7 +20,7 @@ import type {
   ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions";
 import { client } from "./client.js";
-import { config } from "../config.js";
+import { config, runtimeSettings } from "../config.js";
 import { getToolDefinitions, executeTool } from "../tools/index.js";
 
 // Logging helpers for visibility
@@ -83,6 +83,56 @@ function parseToolArguments(argsString: string): Record<string, unknown> {
       return {};
     }
   }
+}
+
+// ANSI color codes for terminal output
+const colors = {
+  blue: "\x1b[34m",      // Blue (for thinking content)
+  yellow: "\x1b[33m",    // Yellow (for thinking header)
+  green: "\x1b[32m",     // Green (for response header)
+  reset: "\x1b[0m",      // Reset to default
+};
+
+/**
+ * Process thinking tags from model output.
+ *
+ * WHY THIS EXISTS:
+ * ================
+ * Some local models (like Nemotron, DeepSeek, Qwen) output their chain-of-thought
+ * reasoning inside <think>...</think> tags. We want to either:
+ * - Hide the thinking (default)
+ * - Show it in a different color when /show-thinking is enabled
+ *
+ * Note: Some models only output </think> without the opening tag, so we handle both cases.
+ */
+function processThinkingTags(content: string): string {
+  // Extract thinking content and main response
+  let thinking = "";
+  let response = content;
+
+  // Case 1: Full <think>...</think> blocks
+  const fullMatch = content.match(/<think>([\s\S]*?)<\/think>/);
+  if (fullMatch) {
+    thinking = fullMatch[1].trim();
+    response = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  } else {
+    // Case 2: Everything before </think> (when opening tag is missing)
+    const partialMatch = content.match(/^([\s\S]*?)<\/think>/);
+    if (partialMatch) {
+      thinking = partialMatch[1].trim();
+      response = content.replace(/^[\s\S]*?<\/think>/g, "").trim();
+    }
+  }
+
+  // If user wants to see thinking, format it nicely
+  if (runtimeSettings.showThinking && thinking) {
+    const thinkingHeader = `${colors.yellow}── Thinking ──${colors.reset}`;
+    const thinkingContent = `${colors.blue}${thinking}${colors.reset}`;
+    const responseHeader = `${colors.green}── Response ──${colors.reset}`;
+    return `${thinkingHeader}\n${thinkingContent}\n\n${responseHeader}\n${response}`;
+  }
+
+  return response;
 }
 
 /**
@@ -195,7 +245,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
       // Return the text content to show the user.
       //
       log.step("LLM finished (no more tool calls)");
-      return assistantMessage.content || "(no response)";
+      return processThinkingTags(assistantMessage.content || "(no response)");
     }
 
     // =========================================================================
@@ -304,7 +354,7 @@ export async function runAgentLoop(userMessage: string): Promise<string> {
   log.error(`Hit maximum iterations (${maxIterations})`);
   const lastMessage = messages[messages.length - 1];
   if (lastMessage && "content" in lastMessage && typeof lastMessage.content === "string") {
-    return lastMessage.content;
+    return processThinkingTags(lastMessage.content);
   }
   return "(agent stopped - too many iterations)";
 }

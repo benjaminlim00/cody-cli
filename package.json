@@ -4,6 +4,9 @@
   "description": "A simple AI coding agent demonstrating agentic workflows",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "cody": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
