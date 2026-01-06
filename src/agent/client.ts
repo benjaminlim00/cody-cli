@@ -1,7 +1,7 @@
 /**
  * OpenAI Client Setup
  *
- * Creates an OpenAI client configured to talk to LM Studio's local server.
+ * Creates an OpenAI client configured for the active provider.
  * The OpenAI SDK works with any OpenAI-compatible API by changing the baseURL.
  */
 
@@ -10,5 +10,5 @@ import { config } from "../config.js";
 
 export const client = new OpenAI({
   baseURL: config.baseUrl,
-  apiKey: "lm-studio", // LM Studio doesn't need a real key, but the SDK requires one
+  apiKey: config.apiKey,
 });
