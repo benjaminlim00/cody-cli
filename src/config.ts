@@ -1,3 +1,13 @@
+import dotenv from "dotenv";
+import { homedir } from "os";
+import { join } from "path";
+
+// Load config files (later loads override earlier ones)
+// 1. Global config: ~/.codyrc
+// 2. Local config: .env in current directory
+dotenv.config({ path: join(homedir(), ".codyrc") });
+dotenv.config(); // loads .env from cwd
+
 /**
  * Configuration for Cody CLI
  *
@@ -5,7 +15,10 @@
  * 1. OpenRouter (cloud) - Set OPENROUTER_API_KEY env var
  * 2. LM Studio (local) - Default when no API key is set
  *
- * Set CODY_MODEL env var to override the default model for either provider.
+ * Config is loaded from (in order of priority):
+ * - Environment variables
+ * - .env in current directory
+ * - ~/.codyrc (global config)
  */
 
 const useOpenRouter = !!process.env.OPENROUTER_API_KEY;
@@ -29,8 +42,12 @@ export const config = {
   baseUrl: provider.baseUrl,
   model: process.env.CODY_MODEL || provider.defaultModel,
   apiKey: provider.apiKey,
-  temperature: 0.7,
-  maxTokens: 4096,
+  // Low temperature for deterministic, correct code (0.0-0.2 recommended for coding)
+  // Higher values (0.5+) introduce variability that can cause syntax errors
+  temperature: 0.1,
+  // Room for full file outputs and multi-step tool responses
+  // 4096 can truncate large generations; 8192-16384 safer for coding agents
+  maxTokens: 8192,
   provider: useOpenRouter ? "openrouter" : "lmstudio",
 };
 
@@ -40,4 +57,6 @@ export const config = {
 export const runtimeSettings = {
   // When true, show the model's <think>...</think> reasoning
   showThinking: true,
+  // When true, show extra debug logs (API errors, request details, etc.)
+  debug: false,
 };

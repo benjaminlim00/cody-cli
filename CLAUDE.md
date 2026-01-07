@@ -5,15 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 
 ```bash
-npm run build    # Compile TypeScript to dist/
-npm start        # Run the CLI
-npm run dev      # Build and run in one command
-npm link         # Install globally as `cody` command
+pnpm build       # Compile TypeScript to dist/
+pnpm start       # Run the CLI
+pnpm dev         # Build and run in one command
+npm link         # Install globally as `cody` command (pnpm link has issues)
 ```
+
+## Configuration
+
+Config is loaded from (in priority order):
+1. Environment variables
+2. `.env` in current directory
+3. `~/.codyrc` (global config)
+
+Key env vars:
+- `OPENROUTER_API_KEY` - Use OpenRouter instead of local LM Studio
+- `CODY_MODEL` - Override the default model
 
 ## Architecture
 
-Cody is an AI coding agent that connects to LM Studio's local LLM via the OpenAI-compatible API.
+Cody is an AI coding agent that connects to LLMs via OpenAI-compatible APIs (OpenRouter or local LM Studio).
 
 ### Core Flow
 
@@ -23,23 +34,25 @@ User Input → Agent Loop → LLM (with tools) → Tool Execution → Loop back 
 
 ### Key Modules
 
-**`src/agent/loop.ts`** - The agentic loop. Sends messages + tool definitions to the LLM, executes any tool calls, feeds results back, repeats until LLM responds without tool calls. Heavily commented with numbered steps explaining the flow.
+**`src/config.ts`** - Provider settings (OpenRouter/LM Studio), model selection, and runtime toggles. Loads from env vars, `.env`, and `~/.codyrc`.
 
-**`src/tools/`** - Tool implementations. Each tool has:
-- A `definition` (JSON schema for the LLM)
-- An `execute` function (actual implementation)
+**`src/agent/loop.ts`** - The agentic loop. Sends messages + tool definitions to the LLM, executes any tool calls, feeds results back, repeats until LLM responds without tool calls.
 
-The registry (`index.ts`) provides `getToolDefinitions()` for the LLM and `executeTool()` for execution.
+**`src/agent/client.ts`** - OpenAI client setup, configured for the active provider.
 
-**`src/config.ts`** - LM Studio connection settings (`baseUrl`, `model`) and runtime toggles (`showThinking`).
+**`src/index.ts`** - CLI entry point with readline interface. Handles `/show-thinking`, `/debug`, and `/new` commands.
 
-**`src/index.ts`** - CLI entry point with readline interface. Handles `/show-thinking` command toggle.
+**`src/tools/`** - Tool implementations. Each tool has a `definition` (JSON schema) and an `execute` function.
+
+**`src/utils/`** - Shared utilities:
+- `colors.ts` - ANSI color codes (single source of truth)
+- `markdownRenderer.ts` - Terminal markdown rendering
 
 ### Local Model Handling
 
-Local models often output reasoning in `<think>...</think>` tags (sometimes without opening tag). The `processThinkingTags()` function in `loop.ts` handles this:
+Local models often output reasoning in `<think>...</think>` tags. The `processThinkingTags()` function in `loop.ts` handles this:
 - Strips thinking when `showThinking: false`
-- Formats with colors when `showThinking: true` (yellow header, blue content)
+- Formats with colors when `showThinking: true`
 
 Local models may also produce malformed JSON in tool arguments. `parseToolArguments()` attempts recovery.
 

@@ -20,17 +20,37 @@ import { client } from "./client.js";
 import { config, runtimeSettings } from "../config.js";
 import { getToolDefinitions, executeTool } from "../tools/index.js";
 import { Conversation } from "./conversation.js";
+import { colors } from "../utils/colors.js";
+import { spinner } from "../utils/spinner.js";
 
-// Logging helpers for visibility
+// Logging helpers for visibility (most only show when debug is on)
 const log = {
-  step: (msg: string) => console.log(`\n>> ${msg}`),
-  tool: (name: string, args: unknown) =>
-    console.log(`   🔧 Calling: ${name}(${JSON.stringify(args)})`),
-  result: (output: string) => {
-    const preview = output.length > 200 ? output.slice(0, 200) + "..." : output;
-    console.log(`   ✓ Result: ${preview}`);
+  // Status always shows - cyan for active status
+  status: (msg: string) => console.log(`\n${colors.cyan}>> ${msg}${colors.reset}`),
+  // Steps only in debug - gray for secondary info
+  step: (msg: string) => {
+    if (runtimeSettings.debug) console.log(`\n${colors.gray}>> ${msg}${colors.reset}`);
   },
-  error: (msg: string) => console.log(`   ✗ Error: ${msg}`),
+  // Tool calls - cyan for actions
+  tool: (name: string, args: unknown) => {
+    if (runtimeSettings.debug) console.log(`   ${colors.cyan}🔧 ${name}${colors.reset}(${JSON.stringify(args)})`);
+  },
+  // Results - green for success
+  result: (output: string) => {
+    if (runtimeSettings.debug) {
+      const preview = output.length > 200 ? output.slice(0, 200) + "..." : output;
+      console.log(`   ${colors.green}✓ ${preview}${colors.reset}`);
+    }
+  },
+  // Errors - red for failures
+  error: (msg: string) => console.log(`   ${colors.red}✗ Error: ${msg}${colors.reset}`),
+  // Debug - yellow for attention
+  debug: (msg: string, data?: unknown) => {
+    if (runtimeSettings.debug) {
+      console.log(`   ${colors.yellow}[Debug] ${msg}${colors.reset}`);
+      if (data !== undefined) console.log(`   ${colors.yellow}[Debug]${colors.reset}`, data);
+    }
+  },
 };
 
 /**
@@ -61,7 +81,11 @@ function parseToolArguments(argsString: string): Record<string, unknown> {
     // STEP 3: Attempt to fix common issues
     try {
       // Fix unquoted string values: {path: foo.txt} → {path: "foo.txt"}
-      const fixed = argsString.replace(/: ([^",\{\}\[\]]+)([,\}])/g, ': "$1"$2');
+      // Regex matches `: value,` or `: value}` where value has no quotes/braces/brackets
+      const fixed = argsString.replace(
+        /: ([^",\{\}\[\]]+)([,\}])/g,
+        ': "$1"$2'
+      );
       return JSON.parse(fixed);
     } catch {
       // STEP 4: Give up and return empty args (tool will likely fail gracefully)
@@ -69,14 +93,6 @@ function parseToolArguments(argsString: string): Record<string, unknown> {
     }
   }
 }
-
-// ANSI color codes for terminal output
-const colors = {
-  blue: "\x1b[34m",      // Blue (for thinking content)
-  yellow: "\x1b[33m",    // Yellow (for thinking header)
-  green: "\x1b[32m",     // Green (for response header)
-  reset: "\x1b[0m",      // Reset to default
-};
 
 /**
  * Process thinking tags from model output.
@@ -155,7 +171,7 @@ export async function runAgentLoop(
   let iterationCount = 0;
   const maxIterations = 10;
 
-  log.step("Sending request to LLM...");
+  spinner.start("Thinking...");
 
   // =========================================================================
   // STEP 3: THE MAIN LOOP
@@ -177,12 +193,21 @@ export async function runAgentLoop(
     //   - temperature: randomness (0 = deterministic, 1 = creative)
     //   - max_tokens: maximum response length
     //
+    log.debug(`API Request to ${config.baseUrl}`);
+    log.debug(`Model: ${config.model}, Provider: ${config.provider}`);
+    log.debug(`Messages count: ${conversation.getMessages().length}`);
+
     const response = await client.chat.completions.create({
       model: config.model,
       messages: conversation.getMessages(),
       tools,
       temperature: config.temperature,
       max_tokens: config.maxTokens,
+    });
+
+    log.debug(`API Response received`, {
+      id: response.id,
+      model: response.model,
     });
 
     // =========================================================================
@@ -193,6 +218,7 @@ export async function runAgentLoop(
     //
     const choice = response.choices[0];
     if (!choice) {
+      spinner.stop();
       throw new Error("No response from LLM");
     }
 
@@ -228,6 +254,7 @@ export async function runAgentLoop(
       // The LLM has decided it has enough information and wants to respond.
       // Return the text content to show the user.
       //
+      spinner.stop();
       log.step("LLM finished (no more tool calls)");
       return processThinkingTags(assistantMessage.content || "(no response)");
     }
@@ -335,10 +362,15 @@ export async function runAgentLoop(
   // If we get here, the LLM called tools too many times without finishing.
   // This usually indicates a problem (confused model, infinite loop, etc.)
   //
+  spinner.stop();
   log.error(`Hit maximum iterations (${maxIterations})`);
   const messages = conversation.getMessages();
   const lastMessage = messages[messages.length - 1];
-  if (lastMessage && "content" in lastMessage && typeof lastMessage.content === "string") {
+  if (
+    lastMessage &&
+    "content" in lastMessage &&
+    typeof lastMessage.content === "string"
+  ) {
     return processThinkingTags(lastMessage.content);
   }
   return "(agent stopped - too many iterations)";

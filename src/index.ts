@@ -9,6 +9,7 @@
 import * as readline from "readline";
 import { config, runtimeSettings } from "./config.js";
 import { runAgentLoop, Conversation } from "./agent/index.js";
+import { renderContent } from "./utils/index.js";
 
 // ============================================================================
 // WELCOME MESSAGE
@@ -26,14 +27,14 @@ function showWelcome(): void {
 ║  ╚██████╗╚██████╔╝██████╔╝   ██║                          ║
 ║   ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝                          ║
 ║                                                           ║
-║   Your AI Coding Assistant                                ║
+║   Open Source Coding CLI                                  ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 `);
   console.log(`Connected to: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
   console.log(
-    `\nCommands: "exit" to quit, "/show-thinking" to toggle reasoning, "/new" to clear memory\n`
+    `\nCommands: "exit" to quit, "/show-thinking" to toggle reasoning, "/debug" for debug logs, "/new" to clear memory\n`
   );
 }
 
@@ -76,7 +77,10 @@ async function main(): Promise<void> {
   // Main input loop
   while (true) {
     // Get user input
-    const userInput = await askQuestion("You: ");
+    console.log("─".repeat(60));
+    // We decide user prefix here
+    const userInput = await askQuestion("> ");
+    console.log("─".repeat(60));
 
     const input = userInput.trim().toLowerCase();
 
@@ -90,7 +94,16 @@ async function main(): Promise<void> {
     // Check for /show-thinking command
     if (input === "/show-thinking") {
       runtimeSettings.showThinking = !runtimeSettings.showThinking;
-      console.log(`\n[Thinking display: ${runtimeSettings.showThinking ? "ON" : "OFF"}]\n`);
+      console.log(
+        `\n[Thinking display: ${runtimeSettings.showThinking ? "ON" : "OFF"}]\n`
+      );
+      continue;
+    }
+
+    // Check for /debug command
+    if (input === "/debug") {
+      runtimeSettings.debug = !runtimeSettings.debug;
+      console.log(`\n[Debug mode: ${runtimeSettings.debug ? "ON" : "OFF"}]\n`);
       continue;
     }
 
@@ -108,6 +121,7 @@ Unknown command: ${input}
 
 Available commands:
   /show-thinking  Toggle display of model reasoning
+  /debug          Toggle debug mode for extra logs
   /new            Clear conversation memory and start fresh
   exit            Quit Cody
 `);
@@ -123,13 +137,30 @@ Available commands:
       // Run the agent loop and get the response
       const response = await runAgentLoop(conversation, userInput);
 
-      // Display Cody's response
-      console.log(`\n${"─".repeat(60)}`);
-      console.log("Cody:", response);
-      console.log(`${"─".repeat(60)}\n`);
+      // Render and display the response
+      const renderedResponse = renderContent(response);
+      // We decide Cody prefix here
+      console.log(`\n◆ ${renderedResponse}\n`);
     } catch (error) {
       // Handle errors gracefully
-      console.error("\n[Error]", error instanceof Error ? error.message : error);
+      console.error(
+        "\n[Error]",
+        error instanceof Error ? error.message : error
+      );
+      if (runtimeSettings.debug && error instanceof Error) {
+        console.error("\n[Debug] Full error details:");
+        console.error(error);
+        if ("status" in error)
+          console.error(
+            "[Debug] HTTP Status:",
+            (error as { status: number }).status
+          );
+        if ("code" in error)
+          console.error(
+            "[Debug] Error Code:",
+            (error as { code: string }).code
+          );
+      }
       console.log("Something went wrong. Please try again.\n");
     }
   }

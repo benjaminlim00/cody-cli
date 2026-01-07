@@ -1,6 +1,6 @@
 # Cody CLI
 
-A simple AI coding agent that demonstrates how agentic coding assistants work. Connects to a local LLM running in LM Studio via its OpenAI-compatible API.
+A simple AI coding agent that demonstrates how agentic coding assistants work. Connects to LLMs via OpenAI-compatible APIs (OpenRouter or local LM Studio).
 
 ## What is an Agentic Loop?
 
@@ -13,38 +13,64 @@ Cody keeps the LLM "in the loop" - after each tool execution, results are sent b
 ## Setup
 
 1. **Install dependencies**
+
    ```bash
-   npm install
+   pnpm install
    ```
 
-2. **Start LM Studio**
-   - Load a model (default: `nvidia-nemotron-3-nano-30b-a3b-mlx`) (change in `src/config.ts`)
+2. **Configure provider** (choose one):
+
+   **Option A: OpenRouter (cloud)**
+
+   ```bash
+   cp .env.example .env
+   # Add your OPENROUTER_API_KEY to .env
+   ```
+
+   **Option B: LM Studio (local)**
+
+   - Load a model (default: `nvidia-nemotron-3-nano-30b-a3b-mlx`)
    - Start the local server on port 1234
 
-3. **Configure** (optional)
+3. **Configure model** (optional)
 
-   Edit `src/config.ts` to change the model or base URL.
+   Set `CODY_MODEL` env var or edit `src/config.ts` to change defaults.
 
 ## Usage
 
 ```bash
-npm run build   # Compile TypeScript
-npm start       # Run Cody
+pnpm build      # Compile TypeScript
+pnpm start      # Run Cody
 ```
 
 Or install globally:
+
 ```bash
-npm link
+npm link        # pnpm link has issues, use npm for this
 cody            # Run from anywhere
 ```
 
+## Global Config
+
+To use Cody from any directory with OpenRouter, create a global config:
+
+```bash
+cp .env ~/.codyrc
+```
+
+Config priority (highest to lowest):
+1. Environment variables
+2. `.env` in current directory
+3. `~/.codyrc` (global)
+
 ## Commands
 
-| Command | Description |
-|---------|-------------|
+| Command          | Description                                          |
+| ---------------- | ---------------------------------------------------- |
 | `/show-thinking` | Toggle display of model's chain-of-thought reasoning |
-| `/new` | Clear conversation memory and start fresh |
-| `exit` | Quit Cody |
+| `/debug`         | Toggle debug mode for extra logs                     |
+| `/new`           | Clear conversation memory and start fresh            |
+| `exit`           | Quit Cody                                            |
 
 ## Available Tools
 
@@ -60,15 +86,18 @@ Cody can use these tools to help with coding tasks:
 ```
 src/
 ├── index.ts           # CLI entry point
-├── config.ts          # LM Studio connection settings
+├── config.ts          # Provider and model settings
 ├── agent/
-│   ├── loop.ts        # Core agentic loop (heavily commented)
+│   ├── loop.ts        # Core agentic loop
 │   ├── conversation.ts # Conversation memory management
 │   └── client.ts      # OpenAI client setup
-└── tools/
-    ├── index.ts       # Tool registry
-    ├── types.ts       # Type definitions
-    └── *.ts           # Individual tool implementations
+├── tools/
+│   ├── index.ts       # Tool registry
+│   ├── types.ts       # Type definitions
+│   └── *.ts           # Individual tool implementations
+└── utils/
+    ├── colors.ts      # Shared ANSI color codes
+    └── markdownRenderer.ts # Terminal markdown rendering
 ```
 
 ## Example
@@ -76,16 +105,11 @@ src/
 ```
 You: create a hello world python script and read it back to me
 
->> Sending request to LLM...
->> LLM requested 1 tool call(s):
-   🔧 Calling: write_file({"path":"hello.py","content":"print('Hello, World!')"})
-   ✓ Result: Successfully wrote 23 characters to hello.py
->> Sending tool results back to LLM...
->> LLM requested 1 tool call(s):
-   🔧 Calling: read_file({"path":"hello.py"})
-   ✓ Result: print('Hello, World!')
->> Sending tool results back to LLM...
->> LLM finished (no more tool calls)
+>> Thinking...
+   🔧 write_file({"path":"hello.py","content":"print('Hello, World!')"})
+   ✓ Successfully wrote 23 characters to hello.py
+   🔧 read_file({"path":"hello.py"})
+   ✓ print('Hello, World!')
 
 ────────────────────────────────────────────────────────────
 Cody: I created hello.py with a simple Hello World program. Here's the content:
