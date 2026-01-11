@@ -40,7 +40,9 @@ User Input → Agent Loop → LLM (with tools) → Tool Execution → Loop back 
 
 **`src/agent/client.ts`** - OpenAI client setup, configured for the active provider.
 
-**`src/index.ts`** - CLI entry point with readline interface. Handles `/show-thinking`, `/debug`, and `/new` commands.
+**`src/index.ts`** - CLI entry point with readline interface. Handles `/show-thinking`, `/debug`, `/new`, and `/boss` commands. Supports `--boss` flag for startup.
+
+**`src/boss.ts`** - Boss mode constants and messages for autonomous operation.
 
 **`src/tools/`** - Tool implementations. Each tool has a `definition` (JSON schema) and an `execute` function.
 
@@ -55,6 +57,14 @@ Local models often output reasoning in `<think>...</think>` tags. The `processTh
 - Formats with colors when `showThinking: true`
 
 Local models may also produce malformed JSON in tool arguments. `parseToolArguments()` attempts recovery.
+
+## Boss Mode
+
+Autonomous mode where Cody works continuously without user prompts:
+- Start with `cody --boss` or type `/boss` during a session
+- Press ESC to exit and return to normal mode
+- Cody checks `todos.md` for tasks or thinks of app improvements
+- No iteration cap in boss mode (outer loop handles continuation)
 
 ## Adding New Tools
 

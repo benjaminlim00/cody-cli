@@ -147,7 +147,8 @@ function processThinkingTags(content: string): string {
  */
 export async function runAgentLoop(
   conversation: Conversation,
-  userMessage: string
+  userMessage: string,
+  options: { bossMode?: boolean } = {}
 ): Promise<string> {
   // =========================================================================
   // STEP 1: ADD USER MESSAGE TO CONVERSATION
@@ -168,10 +169,14 @@ export async function runAgentLoop(
   const tools = getToolDefinitions();
 
   // Safety limit - prevents infinite loops if the model keeps calling tools forever
+  // In boss mode, we don't cap iterations (the outer boss loop handles continuation)
   let iterationCount = 0;
-  const maxIterations = 10;
+  const maxIterations = options.bossMode ? Infinity : 10;
 
-  spinner.start("Thinking...");
+  const spinnerText = options.bossMode
+    ? "Thinking... [BOSS MODE - ESC to exit]"
+    : "Thinking...";
+  spinner.start(spinnerText);
 
   // =========================================================================
   // STEP 3: THE MAIN LOOP

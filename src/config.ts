@@ -59,4 +59,8 @@ export const runtimeSettings = {
   showThinking: true,
   // When true, show extra debug logs (API errors, request details, etc.)
   debug: false,
+  // When true, agent is in autonomous boss mode
+  bossMode: false,
+  // Set to true when ESC is pressed to interrupt boss mode
+  bossInterrupted: false,
 };

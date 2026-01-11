@@ -67,10 +67,27 @@ Config priority (highest to lowest):
 
 | Command          | Description                                          |
 | ---------------- | ---------------------------------------------------- |
+| `/boss`          | Enter autonomous boss mode (ESC to exit)             |
 | `/show-thinking` | Toggle display of model's chain-of-thought reasoning |
 | `/debug`         | Toggle debug mode for extra logs                     |
 | `/new`           | Clear conversation memory and start fresh            |
 | `exit`           | Quit Cody                                            |
+
+## Boss Mode
+
+Autonomous mode where Cody works continuously without waiting for prompts:
+
+```bash
+cody --boss     # Start directly in boss mode
+```
+
+Or type `/boss` during a session to enter boss mode.
+
+In boss mode, Cody will:
+- Check `todos.md` for pending tasks (creates it if needed)
+- Think of improvements to make the app more useful
+
+Press **ESC** to exit boss mode and return to normal interaction.
 
 ## Available Tools
 

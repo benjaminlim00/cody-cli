@@ -10,6 +10,7 @@ import * as readline from "readline";
 import { config, runtimeSettings } from "./config.js";
 import { runAgentLoop, Conversation } from "./agent/index.js";
 import { renderContent } from "./utils/index.js";
+import { BOSS_CONTINUATION_PROMPT, ESC_KEY, bossMessages } from "./boss.js";
 
 // ============================================================================
 // WELCOME MESSAGE
@@ -34,8 +35,92 @@ function showWelcome(): void {
   console.log(`Connected to: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
   console.log(
-    `\nCommands: "exit" to quit, "/show-thinking" to toggle reasoning, "/debug" for debug logs, "/new" to clear memory\n`
+    `\nCommands: "/boss" for autonomous mode, "/show-thinking" to toggle reasoning, "/debug" for debug logs, "/new" to clear memory, "exit" to quit\n`
   );
+}
+
+// ============================================================================
+// BOSS MODE
+// ============================================================================
+// Autonomous operation until ESC is pressed.
+//
+async function startBossMode(
+  conversation: Conversation,
+  rl: readline.Interface
+): Promise<void> {
+  console.log(bossMessages.activated);
+
+  // Enable boss mode
+  runtimeSettings.bossMode = true;
+  runtimeSettings.bossInterrupted = false;
+
+  // Store original stdin state
+  const wasRaw = process.stdin.isRaw;
+
+  // Set up ESC key listener
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+  }
+  process.stdin.resume();
+
+  const onKeypress = (key: Buffer) => {
+    if (key.toString() === ESC_KEY) {
+      runtimeSettings.bossInterrupted = true;
+    }
+  };
+  process.stdin.on('data', onKeypress);
+
+  let cycle = 0;
+
+  try {
+    // Initial prompt to kick things off
+    let prompt = BOSS_CONTINUATION_PROMPT;
+
+    while (!runtimeSettings.bossInterrupted) {
+      cycle++;
+      console.log(bossMessages.cycle(cycle));
+      console.log("─".repeat(60));
+
+      try {
+        const response = await runAgentLoop(conversation, prompt, { bossMode: true });
+        const renderedResponse = renderContent(response);
+        console.log(`\n◆ ${renderedResponse}\n`);
+      } catch (error) {
+        console.error("\n[Error]", error instanceof Error ? error.message : error);
+        console.log("Continuing to next cycle...\n");
+      }
+
+      // Check if interrupted during the cycle
+      if (runtimeSettings.bossInterrupted) {
+        break;
+      }
+
+      // Continue with the standard continuation prompt
+      prompt = BOSS_CONTINUATION_PROMPT;
+    }
+  } finally {
+    // Clean up: restore stdin state
+    process.stdin.removeListener('data', onKeypress);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(wasRaw ?? false);
+    }
+
+    // Disable boss mode
+    runtimeSettings.bossMode = false;
+    runtimeSettings.bossInterrupted = false;
+
+    console.log(bossMessages.deactivated);
+  }
+}
+
+// ============================================================================
+// CLI ARGUMENT PARSING
+// ============================================================================
+function parseArgs(): { bossMode: boolean } {
+  const args = process.argv.slice(2);
+  return {
+    bossMode: args.includes('--boss'),
+  };
 }
 
 // ============================================================================
@@ -45,6 +130,7 @@ function showWelcome(): void {
 // through the agent loop.
 //
 async function main(): Promise<void> {
+  const args = parseArgs();
   showWelcome();
 
   // Create conversation state - persists across messages in the session
@@ -73,6 +159,11 @@ async function main(): Promise<void> {
       });
     });
   };
+
+  // Start in boss mode if --boss flag was passed
+  if (args.bossMode) {
+    await startBossMode(conversation, rl);
+  }
 
   // Main input loop
   while (true) {
@@ -114,12 +205,19 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Check for /boss command
+    if (input === "/boss") {
+      await startBossMode(conversation, rl);
+      continue;
+    }
+
     // Unknown slash command - show available commands
     if (input.startsWith("/")) {
       console.log(`
 Unknown command: ${input}
 
 Available commands:
+  /boss           Enter autonomous boss mode (ESC to exit)
   /show-thinking  Toggle display of model reasoning
   /debug          Toggle debug mode for extra logs
   /new            Clear conversation memory and start fresh
