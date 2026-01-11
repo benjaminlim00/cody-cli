@@ -8,7 +8,7 @@
 
 import * as readline from "readline";
 import { config, runtimeSettings } from "./config.js";
-import { runAgentLoop, Conversation } from "./agent/index.js";
+import { runAgentLoop, Conversation, client } from "./agent/index.js";
 import { renderContent } from "./utils/index.js";
 import { BOSS_CONTINUATION_PROMPT, ESC_KEY, bossMessages } from "./boss.js";
 
@@ -85,6 +85,12 @@ async function startBossMode(
         const response = await runAgentLoop(conversation, prompt, { bossMode: true });
         const renderedResponse = renderContent(response);
         console.log(`\n◆ ${renderedResponse}\n`);
+
+        // Auto-compact conversation if it's getting too large
+        if (conversation.needsCompaction()) {
+          console.log(`[Compacting conversation - ${conversation.getMessageCount()} messages]`);
+          await conversation.compact(client, config.model);
+        }
       } catch (error) {
         console.error("\n[Error]", error instanceof Error ? error.message : error);
         console.log("Continuing to next cycle...\n");

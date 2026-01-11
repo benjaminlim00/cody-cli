@@ -5,4 +5,5 @@
  */
 
 export { runAgentLoop } from "./loop.js";
-export { Conversation } from "./conversation.js";
+export { Conversation, COMPACTION_THRESHOLD } from "./conversation.js";
+export { client } from "./client.js";

@@ -221,10 +221,19 @@ export async function runAgentLoop(
     // The response contains "choices" - usually just one.
     // Each choice has a "message" with the LLM's response.
     //
-    const choice = response.choices[0];
-    if (!choice) {
+    // Handle malformed responses (common with rate limiting or API errors)
+    if (!response || !response.choices || !Array.isArray(response.choices)) {
       spinner.stop();
-      throw new Error("No response from LLM");
+      log.error("API returned malformed response (possibly rate limited)");
+      log.debug("Response object:", response);
+      throw new Error("API returned malformed response - try again or check rate limits");
+    }
+
+    const choice = response.choices[0];
+    if (!choice || !choice.message) {
+      spinner.stop();
+      log.error("API returned empty choices array");
+      throw new Error("No response from LLM - context may be too large");
     }
 
     const assistantMessage = choice.message;
