@@ -22,7 +22,6 @@ import { getToolDefinitions, executeTool } from "../tools/index.js";
 import { Conversation } from "./conversation.js";
 import { colors } from "../utils/colors.js";
 import { spinner } from "../utils/spinner.js";
-import { truncateOutput } from "../tools/validation.js";
 
 /**
  * Truncate tool arguments for display (e.g., don't show entire file content)
@@ -355,13 +354,10 @@ export async function runAgentLoop(
       //     content: "..."          // The actual result/output
       //   }
       //
-      // SECURITY: Truncate large outputs to prevent context window overflow
-      const truncatedOutput = truncateOutput(result.output, 5000);
-
       toolResults.push({
         role: "tool",
         tool_call_id: toolCall.id,
-        content: truncatedOutput,
+        content: result.output,
       });
     }
 

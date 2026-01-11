@@ -3,7 +3,7 @@
 ## P0 - Critical (Security & Stability)
 
 - [ ] Add sandboxing so commands don't hit the host (Docker, Firejail, or VM isolation)
-- [ ] Resource limits for code execution (CPU, memory, time)
+- [ ] Resource limits for code execution (CPU, memory, time) - Currently only time limit (30s) and output limit (1MB)
 - [ ] Restrict file operations to project directory (prevent path traversal with `../`)
 - [ ] Validate command whitelist for `run_command` (allowlist: npm, git, python, etc.)
 - [ ] Add tool result size limits (prevent context window overflow from huge outputs)
@@ -65,3 +65,9 @@
 - [ ] Support `cody.config.json` in addition to `.env`
 - [ ] Instrument tool execution (track usage, times, success rates)
 - [ ] Add memory/token usage monitoring with warnings
+
+## Recent Changes
+
+- **read_file**: Now checks if path is a directory and returns helpful error instead of crashing
+- **run_command**: Executes any command (30s timeout, 1MB output limit)
+- **Conversation**: `getMessages()` returns a copy to prevent external modification

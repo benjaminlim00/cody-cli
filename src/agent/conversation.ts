@@ -77,9 +77,10 @@ export class Conversation {
 
   /**
    * Get all messages for sending to the LLM.
+   * Returns a copy to prevent external modification.
    */
   getMessages(): ChatCompletionMessageParam[] {
-    return this.messages;
+    return [...this.messages];
   }
 
   /**

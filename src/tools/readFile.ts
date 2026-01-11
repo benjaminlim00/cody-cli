@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 import type { Tool } from "./types.js";
 
 /**
@@ -29,6 +29,15 @@ export const readFileTool: Tool = {
     const path = args.path as string;
 
     try {
+      // Check if path is a directory
+      const stats = await stat(path);
+      if (stats.isDirectory()) {
+        return {
+          success: false,
+          output: `Error: "${path}" is a directory, not a file. Use list_directory to see its contents.`,
+        };
+      }
+
       const content = await readFile(path, "utf-8");
       return {
         success: true,
