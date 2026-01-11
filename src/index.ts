@@ -66,6 +66,7 @@ async function startBossMode(
   const onKeypress = (key: Buffer) => {
     if (key.toString() === ESC_KEY) {
       runtimeSettings.bossInterrupted = true;
+      console.log('\n[ESC pressed - exiting boss mode after current action...]\n');
     }
   };
   process.stdin.on('data', onKeypress);
