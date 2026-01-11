@@ -23,6 +23,23 @@ import { Conversation } from "./conversation.js";
 import { colors } from "../utils/colors.js";
 import { spinner } from "../utils/spinner.js";
 
+/**
+ * Truncate tool arguments for display (e.g., don't show entire file content)
+ */
+function truncateToolArgs(args: unknown): unknown {
+  if (!args || typeof args !== "object") return args;
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args as Record<string, unknown>)) {
+    if (typeof value === "string" && value.length > 100) {
+      result[key] = value.slice(0, 100) + `... (${value.length} chars)`;
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // Logging helpers for visibility (most only show when debug is on)
 const log = {
   // Status always shows - cyan for active status
@@ -31,9 +48,12 @@ const log = {
   step: (msg: string) => {
     if (runtimeSettings.debug) console.log(`\n${colors.gray}>> ${msg}${colors.reset}`);
   },
-  // Tool calls - cyan for actions
+  // Tool calls - cyan for actions (truncate large args like file content)
   tool: (name: string, args: unknown) => {
-    if (runtimeSettings.debug) console.log(`   ${colors.cyan}🔧 ${name}${colors.reset}(${JSON.stringify(args)})`);
+    if (runtimeSettings.debug) {
+      const truncatedArgs = truncateToolArgs(args);
+      console.log(`   ${colors.cyan}🔧 ${name}${colors.reset}(${JSON.stringify(truncatedArgs)})`);
+    }
   },
   // Results - green for success
   result: (output: string) => {

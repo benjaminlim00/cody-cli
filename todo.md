@@ -28,6 +28,7 @@
 
 ## P2 - Medium (Developer Experience)
 
+- [x] Truncate tool args in debug logs (don't show entire file content for write_file)
 - [ ] Multi-file edits in single atomic operation
 - [ ] Auto-commit checkpoints before risky operations
 - [ ] Auto-format after edits (run prettier/eslint fix)
