@@ -23,6 +23,15 @@ export const spinner = {
   },
 
   /**
+   * Update spinner text
+   */
+  update: (message: string) => {
+    if (activeSpinner) {
+      activeSpinner.text = `${colors.cyan}${message}${colors.reset}`;
+    }
+  },
+
+  /**
    * Stop spinner and clear line
    */
   stop: () => {

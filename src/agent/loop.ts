@@ -22,6 +22,7 @@ import { getToolDefinitions, executeTool } from "../tools/index.js";
 import { Conversation } from "./conversation.js";
 import { colors } from "../utils/colors.js";
 import { spinner } from "../utils/spinner.js";
+import { truncateOutput } from "../tools/validation.js";
 
 /**
  * Truncate tool arguments for display (e.g., don't show entire file content)
@@ -120,11 +121,7 @@ function parseToolArguments(argsString: string): Record<string, unknown> {
  * WHY THIS EXISTS:
  * ================
  * Some local models (like Nemotron, DeepSeek, Qwen) output their chain-of-thought
- * reasoning inside <think>...</think> tags. We want to either:
- * - Hide the thinking (default)
- * - Show it in a different color when /show-thinking is enabled
- *
- * Note: Some models only output </think> without the opening tag, so we handle both cases.
+ * reasoning inside  without the opening tag, so we handle both cases.
  */
 function processThinkingTags(content: string): string {
   // Extract thinking content and main response
@@ -193,10 +190,10 @@ export async function runAgentLoop(
   let iterationCount = 0;
   const maxIterations = options.bossMode ? Infinity : 10;
 
-  const spinnerText = options.bossMode
-    ? "Thinking... [BOSS MODE - ESC to exit]"
+  const spinnerMessage = options.bossMode
+    ? "[BOSS MODE] Working... (ESC to exit)"
     : "Thinking...";
-  spinner.start(spinnerText);
+  spinner.start(spinnerMessage);
 
   // =========================================================================
   // STEP 3: THE MAIN LOOP
@@ -332,6 +329,11 @@ export async function runAgentLoop(
       //   - list_directory: lists files
       //   - run_command: executes shell commands
       //
+      // Update spinner to show which tool is running (helpful in boss mode)
+      if (options.bossMode) {
+        spinner.update(`[BOSS MODE] Running ${toolName}... (ESC to exit)`);
+      }
+
       const result = await executeTool(toolName, toolArgs);
 
       if (result.success) {
@@ -353,10 +355,13 @@ export async function runAgentLoop(
       //     content: "..."          // The actual result/output
       //   }
       //
+      // SECURITY: Truncate large outputs to prevent context window overflow
+      const truncatedOutput = truncateOutput(result.output, 5000);
+
       toolResults.push({
         role: "tool",
         tool_call_id: toolCall.id,
-        content: result.output,
+        content: truncatedOutput,
       });
     }
 
@@ -374,6 +379,11 @@ export async function runAgentLoop(
     conversation.addToolResults(toolResults);
 
     log.step("Sending tool results back to LLM...");
+
+    // Reset spinner for next LLM call
+    if (options.bossMode) {
+      spinner.update("[BOSS MODE] Working... (ESC to exit)");
+    }
 
     // =========================================================================
     // STEP 10: LOOP BACK TO STEP 4

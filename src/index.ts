@@ -45,8 +45,7 @@ function showWelcome(): void {
 // Autonomous operation until ESC is pressed.
 //
 async function startBossMode(
-  conversation: Conversation,
-  rl: readline.Interface
+  conversation: Conversation
 ): Promise<void> {
   console.log(bossMessages.activated);
 
@@ -169,7 +168,7 @@ async function main(): Promise<void> {
 
   // Start in boss mode if --boss flag was passed
   if (args.bossMode) {
-    await startBossMode(conversation, rl);
+    await startBossMode(conversation);
   }
 
   // Main input loop
@@ -214,7 +213,7 @@ async function main(): Promise<void> {
 
     // Check for /boss command
     if (input === "/boss") {
-      await startBossMode(conversation, rl);
+      await startBossMode(conversation);
       continue;
     }
 
