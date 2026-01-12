@@ -7,36 +7,130 @@
  */
 
 import * as readline from "readline";
-import { config, runtimeSettings } from "./config.js";
+import { config, runtimeSettings, type ApprovalResponse } from "./config.js";
 import { runAgentLoop, Conversation, client } from "./agent/index.js";
 import { renderContent } from "./utils/index.js";
 import { BOSS_CONTINUATION_PROMPT, ESC_KEY, bossMessages } from "./boss.js";
+import { colors } from "./utils/colors.js";
+import { spinner } from "./utils/spinner.js";
 
 // ============================================================================
 // WELCOME MESSAGE
 // ============================================================================
 // Show a friendly banner when Cody starts up.
 //
+/**
+ * Returns formatted command list for help display.
+ */
+function getCommandList(): string {
+  return `
+  ${colors.green}/boss${colors.reset}           Autonomous mode - Cody works on todos.md
+  ${colors.green}/show-thinking${colors.reset}  Toggle model reasoning display
+  ${colors.green}/debug${colors.reset}          Toggle debug logs
+  ${colors.green}/new${colors.reset}            Clear conversation memory
+  ${colors.green}/help${colors.reset}           Show all commands
+  ${colors.green}exit${colors.reset}            Quit Cody`;
+}
+
 function showWelcome(): void {
   console.log(`
-╔═══════════════════════════════════════════════════════════╗
+${colors.cyan}╔═══════════════════════════════════════════════════════════╗
+║                                                           ║${colors.reset}
+${colors.cyan}║${colors.reset}   ${colors.magenta}██████╗ ██████╗ ██████╗ ██╗   ██╗${colors.reset}                       ${colors.cyan}║${colors.reset}
+${colors.cyan}║${colors.reset}  ${colors.magenta}██╔════╝██╔═══██╗██╔══██╗╚██╗ ██╔╝${colors.reset}                       ${colors.cyan}║${colors.reset}
+${colors.cyan}║${colors.reset}  ${colors.magenta}██║     ██║   ██║██║  ██║ ╚████╔╝${colors.reset}                        ${colors.cyan}║${colors.reset}
+${colors.cyan}║${colors.reset}  ${colors.magenta}██║     ██║   ██║██║  ██║  ╚██╔╝${colors.reset}                         ${colors.cyan}║${colors.reset}
+${colors.cyan}║${colors.reset}  ${colors.magenta}╚██████╗╚██████╔╝██████╔╝   ██║${colors.reset}                          ${colors.cyan}║${colors.reset}
+${colors.cyan}║${colors.reset}   ${colors.magenta}╚═════╝ ╚═════╝ ╚═════╝    ╚═╝${colors.reset}                          ${colors.cyan}║${colors.reset}
+${colors.cyan}║                                                           ║
+║${colors.reset}   ${colors.yellow}Open Source Coding CLI${colors.reset}                                  ${colors.cyan}║
 ║                                                           ║
-║   ██████╗ ██████╗ ██████╗ ██╗   ██╗                       ║
-║  ██╔════╝██╔═══██╗██╔══██╗╚██╗ ██╔╝                       ║
-║  ██║     ██║   ██║██║  ██║ ╚████╔╝                        ║
-║  ██║     ██║   ██║██║  ██║  ╚██╔╝                         ║
-║  ╚██████╗╚██████╔╝██████╔╝   ██║                          ║
-║   ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝                          ║
-║                                                           ║
-║   Open Source Coding CLI                                  ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════════════════╝${colors.reset}
 `);
-  console.log(`Connected to: ${config.baseUrl}`);
-  console.log(`Model: ${config.model}`);
-  console.log(
-    `\nCommands: "/boss" for autonomous mode, "/show-thinking" to toggle reasoning, "/debug" for debug logs, "/new" to clear memory, "exit" to quit\n`
-  );
+  console.log(`${colors.gray}Connected to:${colors.reset} ${colors.green}${config.baseUrl}${colors.reset}`);
+  console.log(`${colors.gray}Model:${colors.reset} ${colors.green}${config.model}${colors.reset}`);
+  console.log(`\n${colors.cyan}Commands:${colors.reset}${getCommandList()}\n`);
+}
+
+// ============================================================================
+// COMMANDS HELP
+// ============================================================================
+function showHelp(): void {
+  console.log(`\n${colors.cyan}Available Commands:${colors.reset}${getCommandList()}\n`);
+}
+
+// ============================================================================
+// APPROVAL PROMPT
+// ============================================================================
+// Interactive prompt for blocked commands. Uses the main readline to avoid
+// conflicts with multiple readline instances on stdin.
+
+// Reference to main readline - set in main()
+let mainRl: readline.Interface | null = null;
+
+/**
+ * Promisified question using the main readline.
+ */
+function askApprovalQuestion(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!mainRl) {
+      // Fallback if readline not available
+      process.stdout.write(prompt);
+      process.stdin.once("data", (data) => resolve(data.toString().trim()));
+      return;
+    }
+    mainRl.question(prompt, resolve);
+  });
+}
+
+/**
+ * Show approval prompt for blocked commands.
+ * Uses the main readline instance to avoid stdin conflicts.
+ */
+async function createApprovalPrompt(
+  blockedItem: string,
+  reason: string
+): Promise<ApprovalResponse> {
+  // Stop the spinner so user can see the prompt
+  spinner.stop();
+
+  // Ensure stdin is active
+  process.stdin.resume();
+
+  console.log(`\n${colors.yellow}╔════════════════════════════════════════════════════════════╗${colors.reset}`);
+  console.log(`${colors.yellow}║  ⚠️  APPROVAL REQUIRED                                      ║${colors.reset}`);
+  console.log(`${colors.yellow}╚════════════════════════════════════════════════════════════╝${colors.reset}`);
+  console.log(`\n${colors.red}Command:${colors.reset} ${blockedItem}`);
+  console.log(`${colors.red}Reason:${colors.reset}  ${reason}\n`);
+  console.log(`${colors.cyan}Options:${colors.reset}`);
+  console.log(`  ${colors.green}[1]${colors.reset} Yes - Execute the command`);
+  console.log(`  ${colors.red}[2]${colors.reset} No - Cancel the command`);
+  console.log(`  ${colors.blue}[3]${colors.reset} Tell Cody what to do instead\n`);
+
+  const askChoice = async (): Promise<ApprovalResponse> => {
+    const answer = await askApprovalQuestion(`${colors.cyan}Enter choice (1/2/3):${colors.reset} `);
+    const choice = answer.trim();
+
+    if (choice === "1" || choice.toLowerCase() === "yes" || choice.toLowerCase() === "y") {
+      console.log(`${colors.green}✓ Approved${colors.reset}\n`);
+      spinner.start("Thinking...");
+      return { action: "yes" };
+    } else if (choice === "2" || choice.toLowerCase() === "no" || choice.toLowerCase() === "n") {
+      console.log(`${colors.red}✗ Cancelled${colors.reset}\n`);
+      spinner.start("Thinking...");
+      return { action: "no" };
+    } else if (choice === "3") {
+      const instruction = await askApprovalQuestion(`${colors.blue}Tell Cody what to do:${colors.reset} `);
+      console.log(`${colors.blue}→ Instruction received${colors.reset}\n`);
+      spinner.start("Thinking...");
+      return { action: "instruct", message: instruction.trim() };
+    } else {
+      console.log(`${colors.gray}Please enter 1, 2, or 3${colors.reset}`);
+      return askChoice();
+    }
+  };
+
+  return askChoice();
 }
 
 // ============================================================================
@@ -150,6 +244,12 @@ async function main(): Promise<void> {
     terminal: true,
   });
 
+  // Store reference for approval prompts
+  mainRl = rl;
+
+  // Set up approval callback for blocked commands
+  runtimeSettings.approvalCallback = createApprovalPrompt;
+
   // Access history array (exists at runtime but not in TS types)
   const history = (rl as unknown as { history: string[] }).history;
 
@@ -175,7 +275,6 @@ async function main(): Promise<void> {
   while (true) {
     // Get user input
     console.log("─".repeat(60));
-    // We decide user prefix here
     const userInput = await askQuestion("> ");
     console.log("─".repeat(60));
 
@@ -217,18 +316,16 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Check for /help command
+    if (input === "/help") {
+      showHelp();
+      continue;
+    }
+
     // Unknown slash command - show available commands
     if (input.startsWith("/")) {
-      console.log(`
-Unknown command: ${input}
-
-Available commands:
-  /boss           Enter autonomous boss mode (ESC to exit)
-  /show-thinking  Toggle display of model reasoning
-  /debug          Toggle debug mode for extra logs
-  /new            Clear conversation memory and start fresh
-  exit            Quit Cody
-`);
+      console.log(`\n${colors.red}Unknown command:${colors.reset} ${input}`);
+      showHelp();
       continue;
     }
 
@@ -245,6 +342,10 @@ Available commands:
       const renderedResponse = renderContent(response);
       // We decide Cody prefix here
       console.log(`\n◆ ${renderedResponse}\n`);
+
+      // IMPORTANT: The ora spinner library pauses stdin when it stops.
+      // Without this, Node's event loop has no active handles and exits with code 0.
+      process.stdin.resume();
     } catch (error) {
       // Handle errors gracefully
       console.error(

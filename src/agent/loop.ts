@@ -335,10 +335,12 @@ export async function runAgentLoop(
 
       const result = await executeTool(toolName, toolArgs);
 
-      if (result.success) {
-        log.result(result.output);
-      } else {
-        log.error(result.output);
+      if (!result.silent) {
+        if (result.success) {
+          log.result(result.output);
+        } else {
+          log.error(result.output);
+        }
       }
 
       // =====================================================================

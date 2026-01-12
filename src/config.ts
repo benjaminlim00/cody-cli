@@ -52,9 +52,31 @@ export const config = {
 };
 
 /**
+ * Approval response from user when a blocked command is detected.
+ */
+export type ApprovalResponse =
+  | { action: "yes" }
+  | { action: "no" }
+  | { action: "instruct"; message: string };
+
+/**
+ * Callback for handling approval requests.
+ */
+export type ApprovalCallback = (
+  blockedItem: string,
+  reason: string
+) => Promise<ApprovalResponse>;
+
+/**
  * Runtime settings that can be toggled during the session.
  */
-export const runtimeSettings = {
+export const runtimeSettings: {
+  showThinking: boolean;
+  debug: boolean;
+  bossMode: boolean;
+  bossInterrupted: boolean;
+  approvalCallback: ApprovalCallback | null;
+} = {
   // When true, show the model's <think>...</think> reasoning
   showThinking: true,
   // When true, show extra debug logs (API errors, request details, etc.)
@@ -63,4 +85,6 @@ export const runtimeSettings = {
   bossMode: false,
   // Set to true when ESC is pressed to interrupt boss mode
   bossInterrupted: false,
+  // Callback for approval prompts (set by CLI)
+  approvalCallback: null,
 };

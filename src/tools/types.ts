@@ -6,6 +6,8 @@
 export interface ToolResult {
   success: boolean;
   output: string;
+  /** If true, don't log this result (e.g., user rejections) */
+  silent?: boolean;
 }
 
 /**
